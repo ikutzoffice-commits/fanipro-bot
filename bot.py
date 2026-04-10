@@ -16,7 +16,7 @@ import pytz
 
 # ─── CONFIGURAZIONE ───────────────────────────────────────────────────────────
 
-TOKEN = os.environ.get("BOT_TOKEN", "8674327131:AAH2NAggoFBdqkn333cX71V54NqUMVsGA8g")
+TOKEN = os.environ.get("BOT_TOKEN", "8674327131:AAGaqlz_jVuNbDOAnzoQRoze5mLxB8wBU9c")
 SHEET_ID = os.environ.get("SHEET_ID", "1T7LlssReP0hz57zG1Xc_uygG2aDlB-_YWl7-Fvimt8I")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "441187647"))
 TIMEZONE = pytz.timezone("Europe/Rome")
