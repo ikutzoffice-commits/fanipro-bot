@@ -1,5 +1,6 @@
 import logging
 import os
+import json
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import (
@@ -53,7 +54,12 @@ def get_client():
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ]
-    creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
+    creds_json = os.environ.get("GOOGLE_CREDENTIALS")
+    if creds_json:
+        creds_dict = json.loads(creds_json)
+        creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
+    else:
+        creds = Credentials.from_service_account_file("credentials.json", scopes=scopes)
     return gspread.authorize(creds)
 
 
