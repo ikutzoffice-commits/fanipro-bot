@@ -332,11 +332,20 @@ async def cmd_presenti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Comando riservato all'amministratore.")
         return
     mancanti = chi_manca_uscita()
+    filtro_luogo = " ".join(context.args).title() if context.args else None
+    if filtro_luogo:
+        mancanti = [(n, c, l, o) for n, c, l, o in mancanti if l.lower() == filtro_luogo.lower()]
     if not mancanti:
-        await update.message.reply_text("📋 Nessuno attualmente presente.")
+        if filtro_luogo:
+            await update.message.reply_text(f"📋 Nessuno attualmente presente a *{filtro_luogo}*.", parse_mode="Markdown")
+        else:
+            await update.message.reply_text("📋 Nessuno attualmente presente.")
         return
     oggi = datetime.now(TIMEZONE).strftime("%d/%m/%Y")
-    testo = f"👷 *Presenti ora — {oggi}*\n\n"
+    if filtro_luogo:
+        testo = f"👷 *Presenti ora a {filtro_luogo} — {oggi}*\n\n"
+    else:
+        testo = f"👷 *Presenti ora — {oggi}*\n\n"
     per_luogo = {}
     for nome, cognome, luogo, ora in mancanti:
         per_luogo.setdefault(luogo, []).append(f"{nome} {cognome} (dalle {ora})")
