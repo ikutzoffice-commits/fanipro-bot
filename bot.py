@@ -529,12 +529,38 @@ async def cmd_dipendenti(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def messaggio_sconosciuto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        "Non ho capito. Scansiona il tag NFC per timbrare.\n\n"
-        "Comandi disponibili:\n"
-        "/oggi\n/presenti\n/settimana\n/mese\n"
-        "/dipendente Nome Cognome\n/luogo NomeLuogo\n/dipendenti"
-    )
+    if update.effective_user.id == ADMIN_ID:
+        await update.message.reply_text(
+            "Non ho capito. Ecco i comandi disponibili:\n\n"
+            "📋 *Presenze generali*\n"
+            "/oggi — tutte le timbrature di oggi per luogo\n"
+            "/presenti — chi è presente su tutti i luoghi adesso\n"
+            "/presenti Triglio — chi è presente solo al Triglio\n"
+            "/presenti Locri — chi è presente solo a Locri\n"
+            "/presenti Crotone — chi è presente solo a Crotone\n"
+            "/presenti Ufficio — chi è presente solo in Ufficio\n"
+            "/presenti Nuova Sede — chi è presente solo in Nuova Sede\n"
+            "/settimana — riepilogo ultimi 7 giorni per dipendente\n"
+            "/mese — riepilogo mese corrente per dipendente e luogo\n\n"
+            "👷 *Per persona*\n"
+            "/dipendente Mario\\.Rossi — presenze ultimi 30 giorni\n"
+            "/dipendente Mario\\.Rossi 7 — presenze ultimi 7 giorni\n"
+            "/dipendente Francesco Simone\\.De Lio — nomi composti supportati\n\n"
+            "📍 *Per luogo*\n"
+            "/luogo Triglio — presenze ultimi 30 giorni\n"
+            "/luogo Triglio 7 — presenze ultimi 7 giorni\n"
+            "/luogo Nuova Sede — luoghi a due parole supportati\n\n"
+            "👥 *Dipendenti*\n"
+            "/dipendenti — lista tutti i dipendenti registrati\n\n"
+            "⚙️ *Automatico ogni giorno alle 20:00*\n"
+            "⚠️ Alert uscite mancanti\n"
+            "📊 Riepilogo serale completo",
+            parse_mode="Markdown",
+        )
+    else:
+        await update.message.reply_text(
+            "Non ho capito.\nScansiona il tag NFC sul cantiere per timbrare."
+        )
 
 
 # ─── JOB: RIEPILOGO E ALERT SERALE ───────────────────────────────────────────
