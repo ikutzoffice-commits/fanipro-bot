@@ -327,6 +327,15 @@ async def cmd_oggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(testo, parse_mode="Markdown")
 
 
+PREPOSIZIONI_LUOGO = {
+    "triglio": "al Triglio",
+    "locri": "a Locri",
+    "crotone": "a Crotone",
+    "ufficio": "in Ufficio",
+    "nuova sede": "alla Nuova Sede",
+}
+
+
 async def cmd_presenti(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ Comando riservato all'amministratore.")
@@ -337,13 +346,15 @@ async def cmd_presenti(update: Update, context: ContextTypes.DEFAULT_TYPE):
         mancanti = [(n, c, l, o) for n, c, l, o in mancanti if l.lower() == filtro_luogo.lower()]
     if not mancanti:
         if filtro_luogo:
-            await update.message.reply_text(f"📋 Nessuno attualmente presente a *{filtro_luogo}*.", parse_mode="Markdown")
+            prep = PREPOSIZIONI_LUOGO.get(filtro_luogo.lower(), f"a {filtro_luogo}")
+            await update.message.reply_text(f"📋 Nessuno attualmente presente {prep}.", parse_mode="Markdown")
         else:
             await update.message.reply_text("📋 Nessuno attualmente presente.")
         return
     oggi = datetime.now(TIMEZONE).strftime("%d/%m/%Y")
     if filtro_luogo:
-        testo = f"👷 *Presenti ora a {filtro_luogo} — {oggi}*\n\n"
+        prep = PREPOSIZIONI_LUOGO.get(filtro_luogo.lower(), f"a {filtro_luogo}")
+        testo = f"👷 *Presenti ora {prep} — {oggi}*\n\n"
     else:
         testo = f"👷 *Presenti ora — {oggi}*\n\n"
     per_luogo = {}
