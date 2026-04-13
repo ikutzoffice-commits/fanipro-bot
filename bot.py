@@ -12,7 +12,6 @@ from telegram.ext import (
     ConversationHandler,
 )
 import gspread
-from google.oauth2.service_account import Credentials
 import pytz
 
 # ─── CONFIGURAZIONE ───────────────────────────────────────────────────────────
@@ -55,8 +54,7 @@ def get_client():
         "https://www.googleapis.com/auth/drive",
     ]
     creds_dict = json.loads(os.environ["GOOGLE_CREDENTIALS"])
-    creds = Credentials.from_service_account_info(creds_dict, scopes=scopes)
-    return gspread.authorize(creds)
+    return gspread.service_account_from_dict(creds_dict, scopes=scopes)
 
 
 def get_sheet():
@@ -115,7 +113,7 @@ def get_presenze_periodo(giorni: int):
     risultati = []
     for r in records:
         try:
-            data_r = datetime.strptime(r.get("Data", ""), "%d/%m/%Y").replace(tzinfo=TIMEZONE)
+            data_r = TIMEZONE.localize(datetime.strptime(r.get("Data", ""), "%d/%m/%Y"))
             if da <= data_r <= oggi:
                 risultati.append(r)
         except ValueError:
