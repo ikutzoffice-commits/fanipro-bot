@@ -20,6 +20,8 @@ TOKEN = os.environ.get("BOT_TOKEN", "8674327131:AAGaqlz_jVuNbDOAnzoQRoze5mLxB8wB
 SHEET_ID = os.environ.get("SHEET_ID", "1T7LlssReP0hz57zG1Xc_uygG2aDlB-_YWl7-Fvimt8I")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "441187647"))
 TIMEZONE = pytz.timezone("Europe/Rome")
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
+PORT = int(os.environ.get("PORT", 8443))
 
 ORA_INIZIO = 6    # 06:00
 ORA_FINE = 19     # 19:30
@@ -559,19 +561,23 @@ def main():
     app.add_handler(CommandHandler("dipendenti", cmd_dipendenti))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, messaggio_sconosciuto))
 
-    # Job serale alle 20:00 ora italiana
     job_queue = app.job_queue
     ora_invio = datetime.now(TIMEZONE).replace(hour=20, minute=0, second=0, microsecond=0)
     if ora_invio < datetime.now(TIMEZONE):
         ora_invio += timedelta(days=1)
-    job_queue.run_daily(
-        job_serale,
-        time=ora_invio.timetz(),
-        name="riepilogo_serale",
-    )
+    job_queue.run_daily(job_serale, time=ora_invio.timetz(), name="riepilogo_serale")
 
     logger.info("Bot avviato!")
-    app.run_polling()
+
+    if WEBHOOK_URL:
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TOKEN,
+            webhook_url=f"{WEBHOOK_URL}/{TOKEN}",
+        )
+    else:
+        app.run_polling()
 
 
 if __name__ == "__main__":
