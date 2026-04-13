@@ -406,19 +406,25 @@ async def cmd_dipendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if not context.args or len(context.args) < 2:
         await update.message.reply_text(
-            "ℹ️ Uso corretto: `/dipendente Nome Cognome`\nEsempio: `/dipendente Mario Rossi`",
+            "ℹ️ Uso corretto: `/dipendente Nome Cognome [giorni]`\nEsempio: `/dipendente Mario Rossi` oppure `/dipendente Mario Rossi 7`",
             parse_mode="Markdown",
         )
         return
     nome = context.args[0].title()
     cognome = context.args[1].title()
-    presenze = get_presenze_periodo(30)
+    giorni_param = 30
+    if len(context.args) >= 3:
+        try:
+            giorni_param = int(context.args[2])
+        except ValueError:
+            pass
+    presenze = get_presenze_periodo(giorni_param)
     presenze_dip = [
         r for r in presenze
         if r.get("Nome") == nome and r.get("Cognome") == cognome
     ]
     if not presenze_dip:
-        await update.message.reply_text(f"📋 Nessuna presenza trovata per *{nome} {cognome}* negli ultimi 30 giorni.", parse_mode="Markdown")
+        await update.message.reply_text(f"📋 Nessuna presenza trovata per *{nome} {cognome}* negli ultimi {giorni_param} giorni.", parse_mode="Markdown")
         return
 
     giorni = set(r.get("Data") for r in presenze_dip)
@@ -428,7 +434,7 @@ async def cmd_dipendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
         luoghi[luogo] = luoghi.get(luogo, set())
         luoghi[luogo].add(r.get("Data"))
 
-    testo = f"👷 *{nome} {cognome}* — ultimi 30 giorni\n\n"
+    testo = f"👷 *{nome} {cognome}* — ultimi {giorni_param} giorni\n\n"
     testo += f"📆 Giorni presenti: *{len(giorni)}*\n\n"
     testo += "📍 *Per luogo:*\n"
     for luogo, gg in sorted(luoghi.items()):
@@ -443,15 +449,25 @@ async def cmd_luogo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     if not context.args:
         await update.message.reply_text(
-            "ℹ️ Uso corretto: `/luogo NomeLuogo`\nEsempio: `/luogo Triglio`",
+            "ℹ️ Uso corretto: `/luogo NomeLuogo [giorni]`\nEsempio: `/luogo Triglio` oppure `/luogo Triglio 7`",
             parse_mode="Markdown",
         )
         return
-    luogo = " ".join(context.args).title()
-    presenze = get_presenze_periodo(30)
+    giorni_param = 30
+    args = list(context.args)
+    if args and args[-1].isdigit():
+        giorni_param = int(args.pop())
+    luogo = " ".join(args).title()
+    if not luogo:
+        await update.message.reply_text(
+            "ℹ️ Uso corretto: `/luogo NomeLuogo [giorni]`\nEsempio: `/luogo Triglio` oppure `/luogo Triglio 7`",
+            parse_mode="Markdown",
+        )
+        return
+    presenze = get_presenze_periodo(giorni_param)
     presenze_luogo = [r for r in presenze if r.get("Luogo", "").lower() == luogo.lower()]
     if not presenze_luogo:
-        await update.message.reply_text(f"📋 Nessuna presenza trovata per *{luogo}* negli ultimi 30 giorni.", parse_mode="Markdown")
+        await update.message.reply_text(f"📋 Nessuna presenza trovata per *{luogo}* negli ultimi {giorni_param} giorni.", parse_mode="Markdown")
         return
 
     per_dipendente = {}
@@ -459,7 +475,7 @@ async def cmd_luogo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         chiave = f"{r.get('Nome')} {r.get('Cognome')}"
         per_dipendente.setdefault(chiave, set()).add(r.get("Data"))
 
-    testo = f"📍 *{luogo}* — ultimi 30 giorni\n\n"
+    testo = f"📍 *{luogo}* — ultimi {giorni_param} giorni\n\n"
     for dipendente, giorni in sorted(per_dipendente.items()):
         testo += f"👷 {dipendente}: *{len(giorni)} giorni*\n"
     testo += f"\n_Totale timbrature: {len(presenze_luogo)}_"
