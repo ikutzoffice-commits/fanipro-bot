@@ -404,20 +404,31 @@ async def cmd_dipendente(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("⛔ Comando riservato all'amministratore.")
         return
-    if not context.args or len(context.args) < 2:
-        await update.message.reply_text(
-            "ℹ️ Uso corretto: `/dipendente Nome Cognome [giorni]`\nEsempio: `/dipendente Mario Rossi` oppure `/dipendente Mario Rossi 7`",
-            parse_mode="Markdown",
-        )
+    testo_aiuto = (
+        "ℹ️ Uso corretto: `/dipendente Nome.Cognome [giorni]`\n"
+        "Esempi:\n"
+        "`/dipendente Mario.Rossi`\n"
+        "`/dipendente Francesco Simone.De Lio`\n"
+        "`/dipendente Mario.Rossi 7`"
+    )
+    if not context.args:
+        await update.message.reply_text(testo_aiuto, parse_mode="Markdown")
         return
-    nome = context.args[0].title()
-    cognome = context.args[1].title()
+    testo_input = " ".join(context.args)
     giorni_param = 30
-    if len(context.args) >= 3:
-        try:
-            giorni_param = int(context.args[2])
-        except ValueError:
-            pass
+    parti = testo_input.rsplit(" ", 1)
+    if len(parti) == 2 and parti[1].isdigit():
+        giorni_param = int(parti[1])
+        testo_input = parti[0]
+    if "." not in testo_input:
+        await update.message.reply_text(testo_aiuto, parse_mode="Markdown")
+        return
+    nome_raw, cognome_raw = testo_input.split(".", 1)
+    nome = nome_raw.strip().title()
+    cognome = cognome_raw.strip().title()
+    if not nome or not cognome:
+        await update.message.reply_text(testo_aiuto, parse_mode="Markdown")
+        return
     presenze = get_presenze_periodo(giorni_param)
     presenze_dip = [
         r for r in presenze
