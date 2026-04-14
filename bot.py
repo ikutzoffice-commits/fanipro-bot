@@ -1,6 +1,8 @@
 import logging
 import os
 import json
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime, timedelta
 from telegram import Update
 from telegram.ext import (
@@ -637,6 +639,21 @@ def main():
     if ora_invio < datetime.now(TIMEZONE):
         ora_invio += timedelta(days=1)
     job_queue.run_daily(job_serale, time=ora_invio.timetz(), name="riepilogo_serale")
+
+    port = int(os.environ.get("PORT", 8080))
+
+    class _PingHandler(BaseHTTPRequestHandler):
+        def do_GET(self):
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"OK")
+
+        def log_message(self, *args):
+            pass  # silenzia i log HTTP
+
+    server = HTTPServer(("0.0.0.0", port), _PingHandler)
+    threading.Thread(target=server.serve_forever, daemon=True).start()
+    logger.info(f"Ping server avviato sulla porta {port}")
 
     logger.info("Bot avviato!")
     app.run_polling()
