@@ -22,6 +22,7 @@ TOKEN = os.environ.get("BOT_TOKEN", "8674327131:AAGaqlz_jVuNbDOAnzoQRoze5mLxB8wB
 SHEET_ID = os.environ.get("SHEET_ID", "1T7LlssReP0hz57zG1Xc_uygG2aDlB-_YWl7-Fvimt8I")
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "441187647"))
 TIMEZONE = pytz.timezone("Europe/Rome")
+PORT = int(os.environ.get("PORT", 10000))
 
 ORA_INIZIO = 6    # 06:00
 ORA_FINE = 19     # 19:30
@@ -640,8 +641,6 @@ def main():
         ora_invio += timedelta(days=1)
     job_queue.run_daily(job_serale, time=ora_invio.timetz(), name="riepilogo_serale")
 
-    port = int(os.environ.get("PORT", 8080))
-
     class _PingHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             self.send_response(200)
@@ -651,9 +650,9 @@ def main():
         def log_message(self, *args):
             pass  # silenzia i log HTTP
 
-    server = HTTPServer(("0.0.0.0", port), _PingHandler)
+    server = HTTPServer(("0.0.0.0", PORT), _PingHandler)
     threading.Thread(target=server.serve_forever, daemon=True).start()
-    logger.info(f"Ping server avviato sulla porta {port}")
+    logger.info(f"Ping server avviato sulla porta {PORT}")
 
     logger.info("Bot avviato!")
     app.run_polling()
