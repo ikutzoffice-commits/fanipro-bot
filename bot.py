@@ -267,14 +267,15 @@ async def timbra(update: Update, context: ContextTypes.DEFAULT_TYPE, nome: str, 
         f"📋 {tipo}",
         parse_mode="Markdown",
     )
-    await context.bot.send_message(
-        chat_id=ADMIN_ID,
-        text=f"{emoji_tipo} *{tipo}*\n"
-             f"👷 {nome} {cognome}\n"
-             f"📍 {luogo}\n"
-             f"🕐 {now.strftime('%H:%M')}",
-        parse_mode="Markdown",
-    )
+    if update.effective_user.id != ADMIN_ID:
+        await context.bot.send_message(
+            chat_id=ADMIN_ID,
+            text=f"{emoji_tipo} *{tipo}*\n"
+                 f"👷 {nome} {cognome}\n"
+                 f"📍 {luogo}\n"
+                 f"🕐 {now.strftime('%H:%M')}",
+            parse_mode="Markdown",
+        )
 
 
 async def cmd_oggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
