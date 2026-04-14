@@ -26,10 +26,6 @@ TIMEZONE = pytz.timezone("Europe/Rome")
 PORT = int(os.environ.get("PORT", 10000))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
-ORA_INIZIO = 6    # 06:00
-ORA_FINE = 19     # 19:30
-MINUTI_FINE = 30
-
 LUOGHI = {
     "triglio": "Triglio",
     "locri": "Locri",
@@ -162,15 +158,6 @@ def determina_tipo(nome: str, cognome: str, luogo: str) -> str:
     return "ENTRATA"
 
 
-def fuori_orario(now: datetime) -> bool:
-    if now.hour < ORA_INIZIO:
-        return True
-    if now.hour > ORA_FINE:
-        return True
-    if now.hour == ORA_FINE and now.minute > MINUTI_FINE:
-        return True
-    return False
-
 
 def chi_manca_uscita():
     """Restituisce lista di (nome, cognome, luogo, ora_entrata) senza uscita oggi."""
@@ -203,23 +190,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if luogo_nome:
         # Timbratura NFC
-        now = datetime.now(TIMEZONE)
-        if fuori_orario(now):
-            await update.message.reply_text(
-                f"⛔ Timbratura fuori orario!\n"
-                f"L'orario consentito è dalle 06:00 alle 19:30.\n"
-                f"Ora: {now.strftime('%H:%M')}"
-            )
-            await context.bot.send_message(
-                chat_id=ADMIN_ID,
-                text=f"⚠️ *TIMBRATURA FUORI ORARIO*\n"
-                     f"👤 {dipendente['Nome'] + ' ' + dipendente['Cognome'] if dipendente else 'Utente non registrato'}\n"
-                     f"📍 {luogo_nome}\n"
-                     f"🕐 {now.strftime('%H:%M')}",
-                parse_mode="Markdown",
-            )
-            return ConversationHandler.END
-
         if not dipendente:
             context.user_data["luogo_pendente"] = luogo_nome
             await update.message.reply_text(
