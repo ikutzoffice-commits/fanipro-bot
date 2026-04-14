@@ -1,10 +1,7 @@
-import asyncio
 import logging
 import os
 import json
-import threading
 from datetime import datetime, timedelta
-from flask import Flask, request as flask_request
 from telegram import Update
 from telegram.ext import (
     Application,
@@ -19,12 +16,10 @@ import pytz
 
 # ─── CONFIGURAZIONE ───────────────────────────────────────────────────────────
 
-TOKEN = os.environ["BOT_TOKEN"]
-SHEET_ID = os.environ["SHEET_ID"]
-ADMIN_ID = int(os.environ["ADMIN_ID"])
+TOKEN = os.environ.get("BOT_TOKEN", "8674327131:AAGaqlz_jVuNbDOAnzoQRoze5mLxB8wBU9c")
+SHEET_ID = os.environ.get("SHEET_ID", "1T7LlssReP0hz57zG1Xc_uygG2aDlB-_YWl7-Fvimt8I")
+ADMIN_ID = int(os.environ.get("ADMIN_ID", "441187647"))
 TIMEZONE = pytz.timezone("Europe/Rome")
-WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
-PORT = int(os.environ.get("PORT", 8443))
 
 ORA_INIZIO = 6    # 06:00
 ORA_FINE = 19     # 19:30
@@ -50,31 +45,6 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
-
-# ─── FLASK (webhook + health check) ──────────────────────────────────────────
-
-flask_app = Flask(__name__)
-_ptb_app = None
-_ptb_loop = None
-
-
-@flask_app.get("/")
-def _health():
-    return "OK", 200
-
-
-@flask_app.post(f"/{TOKEN}")
-def _telegram_webhook():
-    data = flask_request.get_json(force=True)
-    update = Update.de_json(data, _ptb_app.bot)
-    try:
-        asyncio.run_coroutine_threadsafe(
-            _ptb_app.process_update(update), _ptb_loop
-        ).result(timeout=30)
-    except Exception as e:
-        logger.error(f"Errore processing update: {e}")
-    return "OK", 200
-
 
 # ─── GOOGLE SHEETS ────────────────────────────────────────────────────────────
 
@@ -641,9 +611,7 @@ async def job_serale(context: ContextTypes.DEFAULT_TYPE):
 # ─── MAIN ─────────────────────────────────────────────────────────────────────
 
 def main():
-    global _ptb_app, _ptb_loop
-
-    _ptb_app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).build()
 
     conv_handler = ConversationHandler(
         entry_points=[CommandHandler("start", start)],
@@ -654,45 +622,24 @@ def main():
         fallbacks=[CommandHandler("start", start)],
     )
 
-    _ptb_app.add_handler(conv_handler)
-    _ptb_app.add_handler(CommandHandler("oggi", cmd_oggi))
-    _ptb_app.add_handler(CommandHandler("presenti", cmd_presenti))
-    _ptb_app.add_handler(CommandHandler("settimana", cmd_settimana))
-    _ptb_app.add_handler(CommandHandler("mese", cmd_mese))
-    _ptb_app.add_handler(CommandHandler("dipendente", cmd_dipendente))
-    _ptb_app.add_handler(CommandHandler("luogo", cmd_luogo))
-    _ptb_app.add_handler(CommandHandler("dipendenti", cmd_dipendenti))
-    _ptb_app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, messaggio_sconosciuto))
+    app.add_handler(conv_handler)
+    app.add_handler(CommandHandler("oggi", cmd_oggi))
+    app.add_handler(CommandHandler("presenti", cmd_presenti))
+    app.add_handler(CommandHandler("settimana", cmd_settimana))
+    app.add_handler(CommandHandler("mese", cmd_mese))
+    app.add_handler(CommandHandler("dipendente", cmd_dipendente))
+    app.add_handler(CommandHandler("luogo", cmd_luogo))
+    app.add_handler(CommandHandler("dipendenti", cmd_dipendenti))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, messaggio_sconosciuto))
 
-    job_queue = _ptb_app.job_queue
+    job_queue = app.job_queue
     ora_invio = datetime.now(TIMEZONE).replace(hour=20, minute=0, second=0, microsecond=0)
     if ora_invio < datetime.now(TIMEZONE):
         ora_invio += timedelta(days=1)
     job_queue.run_daily(job_serale, time=ora_invio.timetz(), name="riepilogo_serale")
 
-    if WEBHOOK_URL:
-        # Avvia event loop asyncio in un thread separato
-        _ptb_loop = asyncio.new_event_loop()
-        threading.Thread(target=_ptb_loop.run_forever, daemon=True).start()
-
-        # Inizializza e avvia il bot
-        asyncio.run_coroutine_threadsafe(_ptb_app.initialize(), _ptb_loop).result()
-        asyncio.run_coroutine_threadsafe(_ptb_app.start(), _ptb_loop).result()
-
-        # Registra il webhook con Telegram
-        asyncio.run_coroutine_threadsafe(
-            _ptb_app.bot.set_webhook(
-                url=f"{WEBHOOK_URL}/{TOKEN}",
-                drop_pending_updates=True,
-            ),
-            _ptb_loop,
-        ).result()
-
-        logger.info(f"Bot avviato in modalità webhook su porta {PORT}")
-        flask_app.run(host="0.0.0.0", port=PORT)
-    else:
-        logger.info("Bot avviato in modalità polling")
-        _ptb_app.run_polling()
+    logger.info("Bot avviato!")
+    app.run_polling()
 
 
 if __name__ == "__main__":
