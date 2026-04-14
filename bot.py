@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import json
@@ -23,6 +24,7 @@ SHEET_ID = os.environ.get("SHEET_ID", "1T7LlssReP0hz57zG1Xc_uygG2aDlB-_YWl7-Fvim
 ADMIN_ID = int(os.environ.get("ADMIN_ID", "441187647"))
 TIMEZONE = pytz.timezone("Europe/Rome")
 PORT = int(os.environ.get("PORT", 10000))
+WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "")
 
 ORA_INIZIO = 6    # 06:00
 ORA_FINE = 19     # 19:30
@@ -641,21 +643,64 @@ def main():
         ora_invio += timedelta(days=1)
     job_queue.run_daily(job_serale, time=ora_invio.timetz(), name="riepilogo_serale")
 
-    class _PingHandler(BaseHTTPRequestHandler):
-        def do_GET(self):
-            self.send_response(200)
-            self.end_headers()
-            self.wfile.write(b"OK")
+    if WEBHOOK_URL:
+        # Avvia event loop asyncio in thread separato per il bot
+        ptb_loop = asyncio.new_event_loop()
+        threading.Thread(target=ptb_loop.run_forever, daemon=True).start()
 
-        def log_message(self, *args):
-            pass  # silenzia i log HTTP
+        asyncio.run_coroutine_threadsafe(app.initialize(), ptb_loop).result()
+        asyncio.run_coroutine_threadsafe(app.start(), ptb_loop).result()
+        asyncio.run_coroutine_threadsafe(
+            app.bot.set_webhook(url=f"{WEBHOOK_URL}/webhook", drop_pending_updates=True),
+            ptb_loop,
+        ).result()
 
-    server = HTTPServer(("0.0.0.0", PORT), _PingHandler)
-    threading.Thread(target=server.serve_forever, daemon=True).start()
-    logger.info(f"Ping server avviato sulla porta {PORT}")
+        class _WebhookHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"OK")
 
-    logger.info("Bot avviato!")
-    app.run_polling()
+            def do_POST(self):
+                if self.path == "/webhook":
+                    try:
+                        length = int(self.headers.get("Content-Length", 0))
+                        body = json.loads(self.rfile.read(length))
+                        update = Update.de_json(body, app.bot)
+                        asyncio.run_coroutine_threadsafe(
+                            app.process_update(update), ptb_loop
+                        ).result(timeout=30)
+                    except Exception as e:
+                        logger.error(f"Errore webhook: {e}")
+                    self.send_response(200)
+                    self.end_headers()
+                else:
+                    self.send_response(404)
+                    self.end_headers()
+
+            def log_message(self, *args):
+                pass
+
+        logger.info(f"Bot avviato in modalità webhook — {WEBHOOK_URL}/webhook (porta {PORT})")
+        HTTPServer(("0.0.0.0", PORT), _WebhookHandler).serve_forever()
+
+    else:
+        class _PingHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                self.send_response(200)
+                self.end_headers()
+                self.wfile.write(b"OK")
+
+            def log_message(self, *args):
+                pass
+
+        threading.Thread(
+            target=HTTPServer(("0.0.0.0", PORT), _PingHandler).serve_forever,
+            daemon=True,
+        ).start()
+        logger.info(f"Ping server avviato sulla porta {PORT}")
+        logger.info("Bot avviato in modalità polling")
+        app.run_polling()
 
 
 if __name__ == "__main__":
