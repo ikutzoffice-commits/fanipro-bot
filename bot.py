@@ -1,11 +1,12 @@
 import asyncio
 import logging
+import math
 import os
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from datetime import datetime, timedelta
-from telegram import Update
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton, ReplyKeyboardRemove
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -34,10 +35,21 @@ LUOGHI = {
     "nuova_sede": "Nuova Sede",
 }
 
+COORDINATE_LUOGHI = {
+    "Triglio":    (39.157835, 16.287333),
+    "Locri":      (38.243139, 16.275500),
+    "Crotone":    (39.080972, 17.131944),
+    "Ufficio":    (39.305610, 16.246150),
+    "Nuova Sede": (39.367830, 16.253520),
+}
+
+RAGGIO_METRI = 500
+
 # ─── STATI CONVERSAZIONE ──────────────────────────────────────────────────────
 
 ATTENDI_NOME = 1
 ATTENDI_COGNOME = 2
+ATTENDI_POSIZIONE = 3
 
 # ─── LOGGING ──────────────────────────────────────────────────────────────────
 
@@ -46,6 +58,17 @@ logging.basicConfig(
     level=logging.INFO,
 )
 logger = logging.getLogger(__name__)
+
+# ─── GEOLOCALIZZAZIONE ────────────────────────────────────────────────────────
+
+def distanza_metri(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+    R = 6_371_000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi / 2) ** 2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2) ** 2
+    return 2 * R * math.asin(math.sqrt(a))
+
 
 # ─── GOOGLE SHEETS ────────────────────────────────────────────────────────────
 
@@ -199,8 +222,21 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             return ATTENDI_NOME
         else:
-            await timbra(update, context, dipendente["Nome"], dipendente["Cognome"], luogo_nome)
-            return ConversationHandler.END
+            context.user_data["luogo_pendente"] = luogo_nome
+            context.user_data["nome"] = dipendente["Nome"]
+            context.user_data["cognome"] = dipendente["Cognome"]
+            keyboard = ReplyKeyboardMarkup(
+                [[KeyboardButton("📍 Invia posizione", request_location=True)]],
+                one_time_keyboard=True,
+                resize_keyboard=True,
+            )
+            await update.message.reply_text(
+                f"📍 Per timbrare a *{luogo_nome}* invia la tua posizione.\n"
+                "Premi il pulsante qui sotto 👇",
+                parse_mode="Markdown",
+                reply_markup=keyboard,
+            )
+            return ATTENDI_POSIZIONE
     else:
         # Apertura normale
         if not dipendente:
@@ -242,6 +278,7 @@ async def ricevi_cognome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     nome = context.user_data.get("nome")
     telegram_id = update.effective_user.id
     registra_dipendente(telegram_id, nome, cognome)
+    context.user_data["cognome"] = cognome
     await update.message.reply_text(
         f"✅ Registrato come *{nome} {cognome}*!\n\n"
         "Da ora in poi scansiona il tag NFC per timbrare. È tutto automatico!",
@@ -249,11 +286,22 @@ async def ricevi_cognome(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     luogo_pendente = context.user_data.get("luogo_pendente")
     if luogo_pendente:
-        await timbra(update, context, nome, cognome, luogo_pendente)
+        keyboard = ReplyKeyboardMarkup(
+            [[KeyboardButton("📍 Invia posizione", request_location=True)]],
+            one_time_keyboard=True,
+            resize_keyboard=True,
+        )
+        await update.message.reply_text(
+            f"📍 Per timbrare a *{luogo_pendente}* invia la tua posizione.\n"
+            "Premi il pulsante qui sotto 👇",
+            parse_mode="Markdown",
+            reply_markup=keyboard,
+        )
+        return ATTENDI_POSIZIONE
     return ConversationHandler.END
 
 
-async def timbra(update: Update, context: ContextTypes.DEFAULT_TYPE, nome: str, cognome: str, luogo: str):
+async def timbra(update: Update, context: ContextTypes.DEFAULT_TYPE, nome: str, cognome: str, luogo: str, reply_markup=None):
     tipo = determina_tipo(nome, cognome, luogo)
     scrivi_presenza(nome, cognome, luogo, tipo)
     emoji_tipo = "🟢" if tipo == "ENTRATA" else "🔵"
@@ -266,6 +314,7 @@ async def timbra(update: Update, context: ContextTypes.DEFAULT_TYPE, nome: str, 
         f"🕐 {now.strftime('%H:%M')} del {now.strftime('%d/%m/%Y')}\n"
         f"📋 {tipo}",
         parse_mode="Markdown",
+        reply_markup=reply_markup,
     )
     if update.effective_user.id != ADMIN_ID:
         await context.bot.send_message(
@@ -276,6 +325,36 @@ async def timbra(update: Update, context: ContextTypes.DEFAULT_TYPE, nome: str, 
                  f"🕐 {now.strftime('%H:%M')}",
             parse_mode="Markdown",
         )
+
+
+async def ricevi_posizione(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    luogo = context.user_data.get("luogo_pendente")
+    nome = context.user_data.get("nome")
+    cognome = context.user_data.get("cognome")
+
+    if not luogo or not nome or not cognome:
+        await update.message.reply_text(
+            "Sessione scaduta. Scansiona di nuovo il tag NFC.",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+        return ConversationHandler.END
+
+    lat_lav = update.message.location.latitude
+    lon_lav = update.message.location.longitude
+    coordinate = COORDINATE_LUOGHI.get(luogo)
+
+    if coordinate is None or distanza_metri(lat_lav, lon_lav, *coordinate) <= RAGGIO_METRI:
+        await timbra(update, context, nome, cognome, luogo, reply_markup=ReplyKeyboardRemove())
+    else:
+        distanza = int(distanza_metri(lat_lav, lon_lav, *coordinate))
+        await update.message.reply_text(
+            f"⛔ Sei troppo lontano dal cantiere.\n"
+            f"Devi essere entro {RAGGIO_METRI} metri per timbrare.\n"
+            f"_(distanza rilevata: {distanza} m)_",
+            parse_mode="Markdown",
+            reply_markup=ReplyKeyboardRemove(),
+        )
+    return ConversationHandler.END
 
 
 async def cmd_oggi(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -594,6 +673,7 @@ def main():
         states={
             ATTENDI_NOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_nome)],
             ATTENDI_COGNOME: [MessageHandler(filters.TEXT & ~filters.COMMAND, ricevi_cognome)],
+            ATTENDI_POSIZIONE: [MessageHandler(filters.LOCATION, ricevi_posizione)],
         },
         fallbacks=[CommandHandler("start", start)],
     )
