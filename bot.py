@@ -43,7 +43,7 @@ COORDINATE_LUOGHI = {
     "Nuova Sede": (39.367830, 16.253520),
 }
 
-RAGGIO_METRI = 500
+RAGGIO_METRI = 250
 
 # ─── STATI CONVERSAZIONE ──────────────────────────────────────────────────────
 
